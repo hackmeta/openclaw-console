@@ -4,6 +4,7 @@ import { DashboardLayout } from '@/components/dashboard-layout';
 import { StatusBadge } from '@/components/status-badge';
 import { LogViewer } from '@/components/log-viewer';
 import { api } from '@/lib/api';
+import { friendlyError } from '@/lib/error';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Instance, LogEntry, ChannelType } from '@/types';
@@ -105,7 +106,12 @@ export default function InstanceDetailPage({ params }: Props) {
       }
     } catch (error) {
       console.error('Action failed:', error);
-      alert('Action failed. Please try again.');
+      const message = action === 'start' 
+        ? 'Failed to start instance. Please try again.'
+        : action === 'stop' 
+        ? 'Failed to stop instance.'
+        : friendlyError(error);
+      alert(message);
     } finally {
       setActionLoading(false);
     }

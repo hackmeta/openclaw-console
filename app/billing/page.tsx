@@ -3,6 +3,7 @@
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { PricingModal } from '@/components/pricing-modal';
 import { api } from '@/lib/api';
+import { friendlyError } from '@/lib/error';
 import { PLANS } from '@/lib/billing';
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -48,7 +49,7 @@ function BillingContent() {
       window.location.href = response.portal_url;
     } catch (error) {
       console.error('Failed to open billing portal:', error);
-      alert('Failed to open billing portal. Please try again.');
+      alert(friendlyError(error));
     }
   };
 

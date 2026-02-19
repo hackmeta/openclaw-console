@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
+import { friendlyError } from '@/lib/error';
 import Link from 'next/link';
 
 export default function RegisterPage() {
@@ -25,7 +26,7 @@ export default function RegisterPage() {
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError('Password must be at least 8 characters with letters and numbers');
       return;
     }
 
@@ -35,7 +36,7 @@ export default function RegisterPage() {
       await register({ email, password });
       setRegistered(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }
@@ -48,7 +49,7 @@ export default function RegisterPage() {
       setError('');
       alert('Verification email sent! Please check your inbox.');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to resend verification email');
+      setError(friendlyError(err));
     } finally {
       setResending(false);
     }

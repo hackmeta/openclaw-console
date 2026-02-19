@@ -3,6 +3,7 @@
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { PricingModal } from '@/components/pricing-modal';
 import { api } from '@/lib/api';
+import { friendlyError } from '@/lib/error';
 import { canCreateInstance, isModelAvailable, getRemainingSlots, getSuggestedUpgrade, getPlan } from '@/lib/billing';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -98,7 +99,7 @@ export default function NewInstancePage() {
         setPricingReason(`You've reached the instance limit for ${getPlan(currentPlan).name} plan. Upgrade to create more instances.`);
         setShowPricingModal(true);
       } else {
-        setError('You have reached the maximum number of instances for your plan.');
+        setError("You've reached your plan limit. Upgrade to create more instances.");
       }
       return;
     }
@@ -154,7 +155,7 @@ export default function NewInstancePage() {
       
       router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create instance');
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }

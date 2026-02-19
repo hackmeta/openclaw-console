@@ -3,6 +3,7 @@
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { StatusBadge } from '@/components/status-badge';
 import { api } from '@/lib/api';
+import { friendlyError } from '@/lib/error';
 import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
@@ -34,7 +35,7 @@ export default function DashboardPage() {
       setInstances(data);
     } catch (err) {
       console.error('Failed to load instances:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load instances');
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }
@@ -65,7 +66,7 @@ export default function DashboardPage() {
       alert('Verification email sent! Please check your inbox.');
     } catch (err) {
       console.error('Failed to resend verification:', err);
-      alert(err instanceof Error ? err.message : 'Failed to resend verification email');
+      alert(friendlyError(err));
     } finally {
       setResending(false);
     }

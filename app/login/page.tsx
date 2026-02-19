@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { friendlyError } from '@/lib/error';
 import Link from 'next/link';
 
 export default function LoginPage() {
@@ -19,7 +20,7 @@ export default function LoginPage() {
     try {
       await login({ email, password });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }
