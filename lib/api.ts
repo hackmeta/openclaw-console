@@ -197,81 +197,26 @@ class ApiClient {
     });
   }
 
-  // Log APIs (placeholder - implement if backend supports)
-  async getLogs(instanceId: string, limit = 100): Promise<LogEntry[]> {
-    // TODO: Implement if backend has logs API
-    return [];
-  }
-
-  async getInstanceLogs(instanceId: string, limit = 100): Promise<LogEntry[]> {
-    // Mock data for now - replace with real API when available
-    const mockLogs: LogEntry[] = [];
-    const components = ['gateway', 'telegram', 'session', 'anthropic', 'rate-limit', 'websocket'];
-    const levels: ('info' | 'warn' | 'error')[] = ['info', 'info', 'info', 'info', 'warn', 'error'];
+  // Log APIs
+  async getInstanceLogs(instanceId: string, limit = 100, level?: string, search?: string): Promise<LogEntry[]> {
+    const tenantId = this.getTenantId();
+    const params = new URLSearchParams({ lines: String(limit) });
+    if (level && level !== 'all') params.set('level', level.toUpperCase());
+    if (search) params.set('search', search);
     
-    const messages = {
-      gateway: [
-        'listening on ws://[::1]:18789',
-        'client connected from ::1',
-        'heartbeat received',
-        'connection upgraded to websocket',
-      ],
-      telegram: [
-        'starting provider (@openclaw_bot)',
-        'bot authenticated successfully',
-        'received update from user',
-        'message sent successfully',
-      ],
-      session: [
-        'new session created',
-        'session resumed from state',
-        'session context loaded',
-        'session terminated',
-      ],
-      anthropic: [
-        'request completed (tokens: 1234)',
-        'request completed (tokens: 2456)',
-        'streaming response started',
-        'model switched to claude-sonnet-4-5',
-      ],
-      'rate-limit': [
-        'approaching quota limit (80%)',
-        'quota reset in 3600s',
-        'rate limit exceeded, waiting...',
-      ],
-      websocket: [
-        'connection established',
-        'ping/pong timeout',
-        'reconnecting...',
-      ],
-    };
-
-    const now = Date.now();
-    const baseTime = now - 3600000; // 1 hour ago
-
-    for (let i = 0; i < limit; i++) {
-      const component = components[Math.floor(Math.random() * components.length)];
-      const level = component === 'rate-limit' ? 'warn' 
-                  : component === 'websocket' && Math.random() > 0.8 ? 'error'
-                  : levels[Math.floor(Math.random() * levels.length)];
-      
-      const componentMessages = messages[component as keyof typeof messages] || ['operation completed'];
-      const message = componentMessages[Math.floor(Math.random() * componentMessages.length)];
-      
-      mockLogs.push({
-        id: `log-${i}`,
+    try {
+      const resp = await this.request<{ logs: LogEntry[]; total: number }>(`/tenants/${tenantId}/agents/${instanceId}/logs?${params}`);
+      return (resp.logs || []).map((log, i) => ({
+        id: log.id || `log-${i}`,
         instance_id: instanceId,
-        level,
-        component,
-        message,
-        timestamp: new Date(baseTime + (i * 36000)).toISOString(), // Spread over 1 hour
-      });
+        level: (log.level || 'info').toLowerCase() as 'info' | 'warn' | 'error',
+        component: log.component || '',
+        message: log.message || '',
+        timestamp: log.timestamp || new Date().toISOString(),
+      }));
+    } catch {
+      return [];
     }
-
-    // Sort by timestamp descending (newest first)
-    return mockLogs.sort((a, b) => 
-      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
   }
 
   // Health check API
