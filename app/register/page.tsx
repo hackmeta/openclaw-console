@@ -118,7 +118,7 @@ export default function RegisterPage() {
               >
                 Email
               </label>
-              <input
+              <input data-lpignore="true"
                 id="email"
                 type="email"
                 required
@@ -136,7 +136,7 @@ export default function RegisterPage() {
               >
                 Password
               </label>
-              <input
+              <input data-lpignore="true"
                 id="password"
                 type="password"
                 required
@@ -157,7 +157,7 @@ export default function RegisterPage() {
               >
                 Confirm Password
               </label>
-              <input
+              <input data-lpignore="true"
                 id="confirmPassword"
                 type="password"
                 required

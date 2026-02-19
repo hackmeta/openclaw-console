@@ -42,7 +42,7 @@ export default function LoginPage() {
               >
                 Email
               </label>
-              <input
+              <input data-lpignore="true"
                 id="email"
                 type="email"
                 required
@@ -60,7 +60,7 @@ export default function LoginPage() {
               >
                 Password
               </label>
-              <input
+              <input data-lpignore="true"
                 id="password"
                 type="password"
                 required
