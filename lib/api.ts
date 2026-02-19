@@ -133,9 +133,22 @@ class ApiClient {
     return {
       id: payload.sub,
       email: payload.email,
+      email_verified: payload.email_verified,
       display_name: payload.display_name,
       roles: payload.roles,
     };
+  }
+
+  async verifyEmail(token: string): Promise<any> {
+    return this.request<any>(`/auth/verify-email?token=${token}`, {
+      method: 'POST',
+    });
+  }
+
+  async resendVerification(): Promise<any> {
+    return this.request<any>('/auth/resend-verification', {
+      method: 'POST',
+    });
   }
 
   // Instance APIs (mapped to Agent APIs)

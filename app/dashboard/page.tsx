@@ -3,6 +3,7 @@
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { StatusBadge } from '@/components/status-badge';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import type { Instance, ChannelType } from '@/types';
@@ -15,9 +16,11 @@ const channelIcons: Record<ChannelType, string> = {
 };
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [instances, setInstances] = useState<Instance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     loadInstances();
@@ -55,9 +58,56 @@ export default function DashboardPage() {
     return channelType ? channelIcons[channelType] : '📡';
   };
 
+  const handleResendVerification = async () => {
+    setResending(true);
+    try {
+      await api.resendVerification();
+      alert('Verification email sent! Please check your inbox.');
+    } catch (err) {
+      console.error('Failed to resend verification:', err);
+      alert(err instanceof Error ? err.message : 'Failed to resend verification email');
+    } finally {
+      setResending(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* Email Verification Banner */}
+        {user && user.email_verified === false && (
+          <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 px-4 py-3">
+            <div className="flex items-start gap-3">
+              <svg
+                className="h-5 w-5 text-yellow-400 mt-0.5 flex-shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm text-yellow-200">
+                  Your email is not verified. Please check your inbox or{' '}
+                  <button
+                    onClick={handleResendVerification}
+                    disabled={resending}
+                    className="underline hover:no-underline font-medium disabled:opacity-50"
+                  >
+                    {resending ? 'sending...' : 'resend verification email'}
+                  </button>
+                  .
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>

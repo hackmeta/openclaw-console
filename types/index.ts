@@ -2,6 +2,7 @@
 export interface User {
   id: string;
   email: string;
+  email_verified?: boolean;
   display_name?: string;
   roles?: string[];
   created_at?: string;

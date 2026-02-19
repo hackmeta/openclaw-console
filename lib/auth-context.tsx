@@ -65,10 +65,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (data: LoginRequest) => {
     const response = await api.login(data);
     localStorage.setItem('token', response.access_token);
-    setUser(response.user);
+    
+    // Extract email_verified from JWT
+    const payload = decodeJWT(response.access_token);
+    const userWithVerification = {
+      ...response.user,
+      email_verified: payload?.email_verified || false,
+    };
+    setUser(userWithVerification);
     
     // Extract tenant_id from JWT
-    const payload = decodeJWT(response.access_token);
     if (payload?.tenant_id) {
       setTenantId(payload.tenant_id);
     }
@@ -79,15 +85,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (data: RegisterRequest) => {
     const response = await api.register(data);
     localStorage.setItem('token', response.access_token);
-    setUser(response.user);
+    
+    // Extract email_verified from JWT
+    const payload = decodeJWT(response.access_token);
+    const userWithVerification = {
+      ...response.user,
+      email_verified: payload?.email_verified || false,
+    };
+    setUser(userWithVerification);
     
     // Extract tenant_id from JWT
-    const payload = decodeJWT(response.access_token);
     if (payload?.tenant_id) {
       setTenantId(payload.tenant_id);
     }
     
-    router.push('/dashboard');
+    // Don't auto-redirect to dashboard anymore
+    // Will be handled by register page to show verification notice
   };
 
   const logout = () => {
