@@ -6,7 +6,7 @@ import { api } from '@/lib/api';
 import { canCreateInstance, isModelAvailable, getRemainingSlots, getSuggestedUpgrade, getPlan } from '@/lib/billing';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ModelType, ChannelType, PlanTier } from '@/types';
+import type { ModelType, ChannelType, PlanTier, ChannelConfig } from '@/types';
 
 const models: ModelType[] = [
   'yunwu/gpt-4o-mini',
@@ -20,7 +20,18 @@ const modelDisplayNames: Record<ModelType, string> = {
   'anthropic/claude-sonnet-4-5': 'Claude Sonnet 4.5',
 };
 
-const channels: ChannelType[] = ['telegram'];
+const channels: Array<{ 
+  type: ChannelType; 
+  label: string; 
+  icon: string; 
+  color: string; 
+  disabled?: boolean;
+  comingSoon?: boolean;
+}> = [
+  { type: 'telegram', label: 'Telegram', icon: '✈️', color: 'blue' },
+  { type: 'discord', label: 'Discord', icon: '🎮', color: 'purple', comingSoon: true },
+  { type: 'whatsapp', label: 'WhatsApp', icon: '💬', color: 'green', disabled: true, comingSoon: true },
+];
 
 export default function NewInstancePage() {
   const router = useRouter();
@@ -36,7 +47,10 @@ export default function NewInstancePage() {
     description: '',
     model: 'yunwu/gpt-4o-mini' as ModelType,
     channel: 'telegram' as ChannelType,
+    // Channel-specific configs
     botToken: '',
+    guildId: '',
+    phoneNumber: '',
   });
 
   useEffect(() => {
@@ -69,6 +83,10 @@ export default function NewInstancePage() {
     setFormData({ ...formData, model });
   };
 
+  const handleChannelSelect = (channel: ChannelType) => {
+    setFormData({ ...formData, channel });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -95,6 +113,13 @@ export default function NewInstancePage() {
       return;
     }
 
+    // Show warning for Discord (coming soon)
+    if (formData.channel === 'discord') {
+      if (!confirm('Discord support is coming soon. The instance will be created but may not work until backend support is added. Continue?')) {
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -102,16 +127,25 @@ export default function NewInstancePage() {
       const [provider, ...modelParts] = formData.model.split('/');
       const model = modelParts.join('/');
 
+      // Build channel config based on channel type
+      const channelConfig: ChannelConfig = {};
+      if (formData.channel === 'telegram') {
+        channelConfig.bot_token_secret_id = formData.botToken;
+      } else if (formData.channel === 'discord') {
+        channelConfig.bot_token_secret_id = formData.botToken;
+        channelConfig.guild_id = formData.guildId;
+      } else if (formData.channel === 'whatsapp') {
+        channelConfig.phone_number = formData.phoneNumber;
+      }
+
       await api.createInstance({
         name: formData.name,
         description: formData.description,
         type: 'channel',
         llm_provider: provider,
         llm_model: model,
-        channel_type: 'telegram',
-        channel_config: {
-          bot_token_secret_id: formData.botToken,
-        },
+        channel_type: formData.channel,
+        channel_config: channelConfig,
         vm_template: 'openclaw-template',
         vm_cpu: 2,
         vm_memory_mb: 2048,
@@ -128,6 +162,9 @@ export default function NewInstancePage() {
 
   const remainingSlots = getRemainingSlots(currentPlan, instanceCount);
   const planInfo = getPlan(currentPlan);
+
+  // Get current channel info
+  const selectedChannelInfo = channels.find((ch) => ch.type === formData.channel);
 
   return (
     <DashboardLayout>
@@ -260,41 +297,131 @@ export default function NewInstancePage() {
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   Channel Type
                 </label>
-                <div className="grid grid-cols-1 gap-3">
-                  {channels.map((channel) => (
-                    <button
-                      key={channel}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, channel })}
-                      className={`rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors capitalize ${
-                        formData.channel === channel
-                          ? 'border-purple-500 bg-purple-500/10 text-purple-400'
-                          : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
-                      }`}
-                    >
-                      {channel.charAt(0).toUpperCase() + channel.slice(1)}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {channels.map((channel) => {
+                    const isSelected = formData.channel === channel.type;
+                    const isDisabled = channel.disabled;
+
+                    return (
+                      <button
+                        key={channel.type}
+                        type="button"
+                        onClick={() => !isDisabled && handleChannelSelect(channel.type)}
+                        disabled={isDisabled}
+                        className={`relative rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
+                          isSelected
+                            ? `border-${channel.color}-500 bg-${channel.color}-500/10 text-${channel.color}-400`
+                            : isDisabled
+                            ? 'border-gray-800 bg-gray-900 text-gray-600 cursor-not-allowed'
+                            : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                        }`}
+                        style={
+                          isSelected
+                            ? {
+                                borderColor: channel.color === 'blue' ? '#3b82f6' : channel.color === 'purple' ? '#a855f7' : '#22c55e',
+                                backgroundColor: channel.color === 'blue' ? 'rgba(59, 130, 246, 0.1)' : channel.color === 'purple' ? 'rgba(168, 85, 247, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+                                color: channel.color === 'blue' ? '#60a5fa' : channel.color === 'purple' ? '#c084fc' : '#4ade80',
+                              }
+                            : {}
+                        }
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          <span className={isDisabled ? 'grayscale' : ''}>{channel.icon}</span>
+                          <span>{channel.label}</span>
+                        </div>
+                        {channel.comingSoon && (
+                          <span className="mt-1 block text-xs text-gray-500">Coming Soon</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="botToken" className="block text-sm font-medium text-gray-300 mb-2">
-                  Bot Token Secret ID
-                </label>
-                <input
-                  id="botToken"
-                  type="text"
-                  required
-                  value={formData.botToken}
-                  onChange={(e) => setFormData({ ...formData, botToken: e.target.value })}
-                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono text-sm"
-                  placeholder="secret-id-from-secret-manager"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Enter the secret ID for your bot token stored in the secret manager
-                </p>
-              </div>
+              {/* Telegram Config */}
+              {formData.channel === 'telegram' && (
+                <div>
+                  <label htmlFor="botToken" className="block text-sm font-medium text-gray-300 mb-2">
+                    Bot Token Secret ID
+                  </label>
+                  <input
+                    id="botToken"
+                    type="text"
+                    required
+                    value={formData.botToken}
+                    onChange={(e) => setFormData({ ...formData, botToken: e.target.value })}
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono text-sm"
+                    placeholder="secret-id-from-secret-manager"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    Enter the secret ID for your bot token stored in the secret manager
+                  </p>
+                </div>
+              )}
+
+              {/* Discord Config */}
+              {formData.channel === 'discord' && (
+                <div className="space-y-4">
+                  <div>
+                    <label htmlFor="discordBotToken" className="block text-sm font-medium text-gray-300 mb-2">
+                      Bot Token Secret ID
+                    </label>
+                    <input
+                      id="discordBotToken"
+                      type="text"
+                      required
+                      value={formData.botToken}
+                      onChange={(e) => setFormData({ ...formData, botToken: e.target.value })}
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono text-sm"
+                      placeholder="secret-id-for-discord-bot-token"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Discord bot token stored in the secret manager
+                    </p>
+                  </div>
+                  <div>
+                    <label htmlFor="guildId" className="block text-sm font-medium text-gray-300 mb-2">
+                      Server ID (Guild ID)
+                    </label>
+                    <input
+                      id="guildId"
+                      type="text"
+                      required
+                      value={formData.guildId}
+                      onChange={(e) => setFormData({ ...formData, guildId: e.target.value })}
+                      className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono text-sm"
+                      placeholder="123456789012345678"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Your Discord server ID (enable Developer Mode to copy it)
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-purple-500/10 border border-purple-500/20 px-4 py-3 text-sm text-purple-400">
+                    ⚠️ Discord support is coming soon. Backend integration in progress.
+                  </div>
+                </div>
+              )}
+
+              {/* WhatsApp Config */}
+              {formData.channel === 'whatsapp' && (
+                <div>
+                  <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-300 mb-2">
+                    Phone Number
+                  </label>
+                  <input
+                    id="phoneNumber"
+                    type="tel"
+                    disabled
+                    value={formData.phoneNumber}
+                    onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
+                    className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-gray-500 placeholder-gray-600 cursor-not-allowed font-mono text-sm"
+                    placeholder="+1234567890"
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    WhatsApp integration coming soon
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

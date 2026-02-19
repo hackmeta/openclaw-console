@@ -12,7 +12,7 @@ export type InstanceStatus = 'running' | 'stopped' | 'error' | 'starting' | 'sto
 
 export type ModelType = 'yunwu/gpt-4o-mini' | 'yunwu/gpt-4o' | 'anthropic/claude-sonnet-4-5';
 
-export type ChannelType = 'telegram';
+export type ChannelType = 'telegram' | 'discord' | 'whatsapp';
 
 export type PlanType = 'Free' | 'Pro' | 'Business';
 
@@ -56,16 +56,20 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface ChannelConfig {
+  bot_token_secret_id?: string;
+  guild_id?: string;
+  phone_number?: string;
+}
+
 export interface CreateInstanceRequest {
   name: string;
   description?: string;
   type: 'channel';
   llm_provider: string;
   llm_model: string;
-  channel_type: 'telegram';
-  channel_config: {
-    bot_token_secret_id: string;
-  };
+  channel_type: ChannelType;
+  channel_config: ChannelConfig;
   vm_template: string;
   vm_cpu: number;
   vm_memory_mb: number;
@@ -84,6 +88,7 @@ export interface LogEntry {
   level: 'info' | 'warn' | 'error';
   message: string;
   timestamp: string;
+  component?: string; // e.g., 'gateway', 'telegram', 'session'
 }
 
 // Billing types

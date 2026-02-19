@@ -9,6 +9,7 @@ const navigation = [
   { name: 'Instances', href: '/instances/new', icon: '➕' },
   { name: 'Billing', href: '/billing', icon: '💳' },
   { name: 'Settings', href: '/settings', icon: '⚙️' },
+  { name: 'Docs', href: '/docs', icon: '📚' },
 ];
 
 export function Sidebar() {

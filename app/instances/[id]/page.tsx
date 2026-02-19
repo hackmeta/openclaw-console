@@ -2,10 +2,18 @@
 
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { StatusBadge } from '@/components/status-badge';
+import { LogViewer } from '@/components/log-viewer';
 import { api } from '@/lib/api';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Instance, LogEntry } from '@/types';
+import type { Instance, LogEntry, ChannelType } from '@/types';
+
+// Channel icon and color mapping
+const channelInfo: Record<ChannelType, { icon: string; color: string; label: string }> = {
+  telegram: { icon: '✈️', color: 'blue', label: 'Telegram' },
+  discord: { icon: '🎮', color: 'purple', label: 'Discord' },
+  whatsapp: { icon: '💬', color: 'green', label: 'WhatsApp' },
+};
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -16,8 +24,10 @@ export default function InstanceDetailPage({ params }: Props) {
   const [instance, setInstance] = useState<Instance | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [id, setId] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'overview' | 'logs'>('overview');
 
   useEffect(() => {
     params.then((p) => setId(p.id));
@@ -34,18 +44,40 @@ export default function InstanceDetailPage({ params }: Props) {
     
     try {
       setLoading(true);
-      const [inst, logs] = await Promise.all([
-        api.getInstance(id),
-        api.getLogs(id),
-      ]);
+      const inst = await api.getInstance(id);
       setInstance(inst);
-      setLogs(logs);
+      
+      // Load logs if on logs tab
+      if (activeTab === 'logs') {
+        await loadLogs();
+      }
     } catch (error) {
       console.error('Failed to load instance:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const loadLogs = async () => {
+    if (!id) return;
+    
+    try {
+      setLogsLoading(true);
+      const instanceLogs = await api.getInstanceLogs(id);
+      setLogs(instanceLogs);
+    } catch (error) {
+      console.error('Failed to load logs:', error);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  // Load logs when switching to logs tab
+  useEffect(() => {
+    if (activeTab === 'logs' && id && logs.length === 0) {
+      loadLogs();
+    }
+  }, [activeTab, id]);
 
   const handleAction = async (action: 'start' | 'stop' | 'restart' | 'delete') => {
     if (!instance) return;
@@ -123,7 +155,36 @@ export default function InstanceDetailPage({ params }: Props) {
           </div>
         </div>
 
-        {/* Details */}
+        {/* Tabs */}
+        <div className="border-b border-gray-800">
+          <nav className="-mb-px flex gap-6">
+            <button
+              onClick={() => setActiveTab('overview')}
+              className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                activeTab === 'overview'
+                  ? 'border-purple-500 text-white'
+                  : 'border-transparent text-gray-400 hover:text-white'
+              }`}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`border-b-2 px-1 pb-3 text-sm font-medium transition-colors ${
+                activeTab === 'logs'
+                  ? 'border-purple-500 text-white'
+                  : 'border-transparent text-gray-400 hover:text-white'
+              }`}
+            >
+              Logs
+            </button>
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'overview' ? (
+          <>
+            {/* Details */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Configuration</h2>
@@ -143,7 +204,12 @@ export default function InstanceDetailPage({ params }: Props) {
               <div>
                 <dt className="text-sm text-gray-400">Channel</dt>
                 <dd className="text-sm font-medium text-white mt-1">
-                  {instance.channel_type || instance.channel || 'N/A'}
+                  {instance.channel_type || instance.channel ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span>{channelInfo[instance.channel_type || instance.channel!]?.icon}</span>
+                      <span>{channelInfo[instance.channel_type || instance.channel!]?.label}</span>
+                    </span>
+                  ) : 'N/A'}
                 </dd>
               </div>
               {instance.description && (
@@ -236,43 +302,19 @@ export default function InstanceDetailPage({ params }: Props) {
             </button>
           </div>
         </div>
-
-        {/* Logs */}
-        <div className="rounded-lg border border-gray-800 bg-gray-900">
-          <div className="border-b border-gray-800 px-6 py-4">
-            <h2 className="text-lg font-semibold text-white">Recent Logs</h2>
+          </>
+        ) : (
+          /* Logs Tab */
+          <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
+            <h2 className="text-lg font-semibold text-white mb-4">Instance Logs</h2>
+            <LogViewer
+              instanceId={id}
+              logs={logs}
+              onRefresh={loadLogs}
+              loading={logsLoading}
+            />
           </div>
-          <div className="p-6">
-            {logs.length === 0 ? (
-              <p className="text-center text-gray-400 py-8">No logs available</p>
-            ) : (
-              <div className="space-y-2">
-                {logs.map((log) => (
-                  <div
-                    key={log.id}
-                    className="flex items-start gap-3 rounded-lg bg-gray-800 px-4 py-3 font-mono text-xs"
-                  >
-                    <span
-                      className={`font-medium ${
-                        log.level === 'error'
-                          ? 'text-red-400'
-                          : log.level === 'warn'
-                          ? 'text-yellow-400'
-                          : 'text-green-400'
-                      }`}
-                    >
-                      [{log.level.toUpperCase()}]
-                    </span>
-                    <span className="text-gray-500">
-                      {new Date(log.timestamp).toLocaleTimeString()}
-                    </span>
-                    <span className="text-gray-300 flex-1">{log.message}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </DashboardLayout>
   );

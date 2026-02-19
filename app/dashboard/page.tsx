@@ -5,7 +5,14 @@ import { StatusBadge } from '@/components/status-badge';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
-import type { Instance } from '@/types';
+import type { Instance, ChannelType } from '@/types';
+
+// Channel icon mapping
+const channelIcons: Record<ChannelType, string> = {
+  telegram: '✈️',
+  discord: '🎮',
+  whatsapp: '💬',
+};
 
 export default function DashboardPage() {
   const [instances, setInstances] = useState<Instance[]>([]);
@@ -41,6 +48,11 @@ export default function DashboardPage() {
 
   const getDisplayIP = (instance: Instance) => {
     return instance.vm_ip || instance.ip;
+  };
+
+  const getChannelIcon = (instance: Instance) => {
+    const channelType = instance.channel_type || instance.channel;
+    return channelType ? channelIcons[channelType] : '📡';
   };
 
   return (
@@ -127,6 +139,7 @@ export default function DashboardPage() {
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3">
+                      <span className="text-base">{getChannelIcon(instance)}</span>
                       <h3 className="text-sm font-medium text-white">
                         {instance.name}
                       </h3>
