@@ -1,0 +1,22 @@
+[Unit]
+Description=OpenClaw Console (Next.js Production)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/openclaw-console/.next/standalone
+ExecStart=/usr/local/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3200
+Environment=HOSTNAME=0.0.0.0
+
+# 日志
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=openclaw-console
+
+[Install]
+WantedBy=multi-user.target
