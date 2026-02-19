@@ -1,50 +1,123 @@
 'use client';
 
 import { DashboardLayout } from '@/components/dashboard-layout';
-import { useState } from 'react';
+import { PricingModal } from '@/components/pricing-modal';
+import { api } from '@/lib/api';
+import { canCreateInstance, isModelAvailable, getRemainingSlots, getSuggestedUpgrade, getPlan } from '@/lib/billing';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ModelType, ChannelType, PlanType } from '@/types';
+import type { ModelType, ChannelType, PlanTier } from '@/types';
 
-const models: ModelType[] = ['Claude', 'GPT', 'Gemini', 'Kimi'];
-const channels: ChannelType[] = ['Telegram'];
-const plans: PlanType[] = ['Free', 'Pro', 'Business'];
+const models: ModelType[] = [
+  'yunwu/gpt-4o-mini',
+  'yunwu/gpt-4o',
+  'anthropic/claude-sonnet-4-5',
+];
 
-const planDetails = {
-  Free: { price: '$0', features: ['1 Instance', '1000 messages/month', 'Community support'] },
-  Pro: { price: '$29', features: ['5 Instances', '50,000 messages/month', 'Priority support'] },
-  Business: { price: '$99', features: ['Unlimited Instances', 'Unlimited messages', '24/7 support'] },
+const modelDisplayNames: Record<ModelType, string> = {
+  'yunwu/gpt-4o-mini': 'GPT-4o Mini',
+  'yunwu/gpt-4o': 'GPT-4o',
+  'anthropic/claude-sonnet-4-5': 'Claude Sonnet 4.5',
 };
+
+const channels: ChannelType[] = ['telegram'];
 
 export default function NewInstancePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [currentPlan, setCurrentPlan] = useState<PlanTier>('free');
+  const [instanceCount, setInstanceCount] = useState(0);
+  const [showPricingModal, setShowPricingModal] = useState(false);
+  const [pricingReason, setPricingReason] = useState('');
   
   const [formData, setFormData] = useState({
     name: '',
-    model: 'Claude' as ModelType,
-    channel: 'Telegram' as ChannelType,
+    description: '',
+    model: 'yunwu/gpt-4o-mini' as ModelType,
+    channel: 'telegram' as ChannelType,
     botToken: '',
-    plan: 'Free' as PlanType,
   });
+
+  useEffect(() => {
+    loadUserPlanAndInstances();
+  }, []);
+
+  const loadUserPlanAndInstances = async () => {
+    try {
+      const [subscription, instances] = await Promise.all([
+        api.getSubscription(),
+        api.getInstances(),
+      ]);
+      setCurrentPlan(subscription.plan);
+      setInstanceCount(instances.length);
+    } catch (err) {
+      console.error('Failed to load user data:', err);
+    }
+  };
+
+  const handleModelSelect = (model: ModelType) => {
+    // Check if model is available for current plan
+    if (!isModelAvailable(currentPlan, model)) {
+      const suggestedPlan = getSuggestedUpgrade(currentPlan);
+      if (suggestedPlan) {
+        setPricingReason(`${modelDisplayNames[model]} is only available on ${getPlan(suggestedPlan).name} plan or higher.`);
+        setShowPricingModal(true);
+      }
+      return;
+    }
+    setFormData({ ...formData, model });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Check instance limit
+    if (!canCreateInstance(currentPlan, instanceCount)) {
+      const suggestedPlan = getSuggestedUpgrade(currentPlan);
+      if (suggestedPlan) {
+        setPricingReason(`You've reached the instance limit for ${getPlan(currentPlan).name} plan. Upgrade to create more instances.`);
+        setShowPricingModal(true);
+      } else {
+        setError('You have reached the maximum number of instances for your plan.');
+      }
+      return;
+    }
+
+    // Check model availability
+    if (!isModelAvailable(currentPlan, formData.model)) {
+      const suggestedPlan = getSuggestedUpgrade(currentPlan);
+      if (suggestedPlan) {
+        setPricingReason(`${modelDisplayNames[formData.model]} is not available on your current plan.`);
+        setShowPricingModal(true);
+      }
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // TODO: Replace with real API call
-      // await api.createInstance({
-      //   name: formData.name,
-      //   model: formData.model,
-      //   channel: formData.channel,
-      //   bot_token: formData.botToken,
-      //   plan: formData.plan,
-      // });
+      // Parse model string to get provider and model
+      const [provider, ...modelParts] = formData.model.split('/');
+      const model = modelParts.join('/');
+
+      await api.createInstance({
+        name: formData.name,
+        description: formData.description,
+        type: 'channel',
+        llm_provider: provider,
+        llm_model: model,
+        channel_type: 'telegram',
+        channel_config: {
+          bot_token_secret_id: formData.botToken,
+        },
+        vm_template: 'openclaw-template',
+        vm_cpu: 2,
+        vm_memory_mb: 2048,
+        vm_disk_gb: 10,
+      });
       
-      // Mock success
-      await new Promise((resolve) => setTimeout(resolve, 1000));
       router.push('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create instance');
@@ -52,6 +125,9 @@ export default function NewInstancePage() {
       setLoading(false);
     }
   };
+
+  const remainingSlots = getRemainingSlots(currentPlan, instanceCount);
+  const planInfo = getPlan(currentPlan);
 
   return (
     <DashboardLayout>
@@ -63,24 +139,74 @@ export default function NewInstancePage() {
           </p>
         </div>
 
+        {/* Plan Status Banner */}
+        <div className="mb-6 rounded-lg border border-gray-800 bg-gray-900 p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-purple-500/10 p-2">
+                <svg className="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-white">
+                  {planInfo.name} Plan - {instanceCount} / {planInfo.features.maxInstances} instances used
+                </p>
+                <p className="text-xs text-gray-400">
+                  {remainingSlots > 0
+                    ? `${remainingSlots} slot${remainingSlots > 1 ? 's' : ''} remaining`
+                    : 'No slots remaining'}
+                </p>
+              </div>
+            </div>
+            {remainingSlots === 0 && (
+              <button
+                onClick={() => {
+                  setPricingReason('Upgrade to create more instances');
+                  setShowPricingModal(true);
+                }}
+                className="rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-2 text-sm font-medium text-white hover:from-purple-700 hover:to-blue-700 transition-all"
+              >
+                Upgrade Plan
+              </button>
+            )}
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Instance Name */}
           <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Basic Information</h2>
             
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
-                Instance Name
-              </label>
-              <input
-                id="name"
-                type="text"
-                required
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
-                placeholder="My Production Bot"
-              />
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
+                  Instance Name
+                </label>
+                <input
+                  id="name"
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  placeholder="My Production Bot"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="description" className="block text-sm font-medium text-gray-300 mb-2">
+                  Description (Optional)
+                </label>
+                <textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  placeholder="A brief description of this bot instance"
+                  rows={3}
+                />
+              </div>
             </div>
           </div>
 
@@ -88,22 +214,41 @@ export default function NewInstancePage() {
           <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
             <h2 className="text-lg font-semibold text-white mb-4">AI Model</h2>
             
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {models.map((model) => (
-                <button
-                  key={model}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, model })}
-                  className={`rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
-                    formData.model === model
-                      ? 'border-purple-500 bg-purple-500/10 text-purple-400'
-                      : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
-                  }`}
-                >
-                  {model}
-                </button>
-              ))}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {models.map((model) => {
+                const isAvailable = isModelAvailable(currentPlan, model);
+                const isSelected = formData.model === model;
+
+                return (
+                  <button
+                    key={model}
+                    type="button"
+                    onClick={() => handleModelSelect(model)}
+                    className={`relative rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
+                      isSelected
+                        ? 'border-purple-500 bg-purple-500/10 text-purple-400'
+                        : isAvailable
+                        ? 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
+                        : 'border-gray-800 bg-gray-900 text-gray-600 cursor-not-allowed'
+                    }`}
+                  >
+                    {modelDisplayNames[model]}
+                    {!isAvailable && (
+                      <div className="absolute -top-2 -right-2">
+                        <svg className="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+            {!isModelAvailable(currentPlan, formData.model) && (
+              <p className="mt-3 text-xs text-yellow-400">
+                🔒 Some models require a higher plan tier
+              </p>
+            )}
           </div>
 
           {/* Channel Configuration */}
@@ -121,13 +266,13 @@ export default function NewInstancePage() {
                       key={channel}
                       type="button"
                       onClick={() => setFormData({ ...formData, channel })}
-                      className={`rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors ${
+                      className={`rounded-lg border-2 px-4 py-3 text-sm font-medium transition-colors capitalize ${
                         formData.channel === channel
                           ? 'border-purple-500 bg-purple-500/10 text-purple-400'
                           : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
                       }`}
                     >
-                      {channel}
+                      {channel.charAt(0).toUpperCase() + channel.slice(1)}
                     </button>
                   ))}
                 </div>
@@ -135,7 +280,7 @@ export default function NewInstancePage() {
 
               <div>
                 <label htmlFor="botToken" className="block text-sm font-medium text-gray-300 mb-2">
-                  Bot Token
+                  Bot Token Secret ID
                 </label>
                 <input
                   id="botToken"
@@ -144,45 +289,12 @@ export default function NewInstancePage() {
                   value={formData.botToken}
                   onChange={(e) => setFormData({ ...formData, botToken: e.target.value })}
                   className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 font-mono text-sm"
-                  placeholder="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ"
+                  placeholder="secret-id-from-secret-manager"
                 />
                 <p className="mt-1 text-xs text-gray-500">
-                  Get your bot token from @BotFather on Telegram
+                  Enter the secret ID for your bot token stored in the secret manager
                 </p>
               </div>
-            </div>
-          </div>
-
-          {/* Plan Selection */}
-          <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">Select Plan</h2>
-            
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              {plans.map((plan) => (
-                <button
-                  key={plan}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, plan })}
-                  className={`rounded-lg border-2 p-4 text-left transition-colors ${
-                    formData.plan === plan
-                      ? 'border-purple-500 bg-purple-500/10'
-                      : 'border-gray-700 bg-gray-800 hover:border-gray-600'
-                  }`}
-                >
-                  <div className="text-lg font-semibold text-white">{plan}</div>
-                  <div className="mt-1 text-2xl font-bold text-purple-400">
-                    {planDetails[plan].price}
-                    <span className="text-sm text-gray-500">/mo</span>
-                  </div>
-                  <ul className="mt-3 space-y-2">
-                    {planDetails[plan].features.map((feature) => (
-                      <li key={feature} className="text-xs text-gray-400">
-                        ✓ {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </button>
-              ))}
             </div>
           </div>
 
@@ -196,7 +308,7 @@ export default function NewInstancePage() {
           <div className="flex items-center gap-4">
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || remainingSlots === 0}
               className="rounded-lg bg-purple-600 px-6 py-2 text-sm font-medium text-white hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-950 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? 'Creating...' : 'Create Instance'}
@@ -211,6 +323,15 @@ export default function NewInstancePage() {
           </div>
         </form>
       </div>
+
+      {/* Pricing Modal */}
+      <PricingModal
+        isOpen={showPricingModal}
+        onClose={() => setShowPricingModal(false)}
+        currentPlan={currentPlan}
+        highlightPlan={getSuggestedUpgrade(currentPlan) || 'pro'}
+        reason={pricingReason}
+      />
     </DashboardLayout>
   );
 }

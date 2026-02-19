@@ -8,10 +8,49 @@ import type {
   LogEntry,
 } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8081';
+// Use empty base URL to leverage Next.js rewrites (proxy)
+// In production, you can set NEXT_PUBLIC_API_URL env var
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
 const API_PREFIX = '/api/v1';
 
+// Default tenant ID (can be overridden by JWT parsing)
+const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
+
+// JWT payload interface
+interface JWTPayload {
+  sub: string;
+  email: string;
+  tenant_id?: string;
+  exp: number;
+  [key: string]: any;
+}
+
+// Helper function to decode JWT
+function decodeJWT(token: string): JWTPayload | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    
+    const payload = parts[1];
+    const decoded = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+    return JSON.parse(decoded);
+  } catch (error) {
+    console.error('Failed to decode JWT:', error);
+    return null;
+  }
+}
+
 class ApiClient {
+  private getTenantId(): string {
+    if (typeof window === 'undefined') return DEFAULT_TENANT_ID;
+    
+    const token = localStorage.getItem('token');
+    if (!token) return DEFAULT_TENANT_ID;
+    
+    const payload = decodeJWT(token);
+    return payload?.tenant_id || DEFAULT_TENANT_ID;
+  }
+
   private getHeaders(): HeadersInit {
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
@@ -48,15 +87,24 @@ class ApiClient {
       throw new Error(error.message || error.error);
     }
 
-    return response.json();
+    const result = await response.json();
+    // Unwrap { data: ... } response format
+    return result.data !== undefined ? result.data : result;
   }
 
   // Auth APIs
   async login(data: LoginRequest): Promise<AuthResponse> {
-    return this.request<AuthResponse>('/auth/login', {
+    const response = await this.request<AuthResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    
+    // Store token in localStorage
+    if (typeof window !== 'undefined' && response.access_token) {
+      localStorage.setItem('token', response.access_token);
+    }
+    
+    return response;
   }
 
   async register(data: RegisterRequest): Promise<AuthResponse> {
@@ -67,54 +115,133 @@ class ApiClient {
   }
 
   async getProfile(): Promise<User> {
-    return this.request<User>('/auth/profile');
+    if (typeof window === 'undefined') {
+      throw new Error('Cannot get profile on server side');
+    }
+    
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('No token found');
+    }
+    
+    // Decode JWT to get user info
+    const payload = decodeJWT(token);
+    if (!payload) {
+      throw new Error('Invalid token');
+    }
+    
+    return {
+      id: payload.sub,
+      email: payload.email,
+      display_name: payload.display_name,
+      roles: payload.roles,
+    };
   }
 
-  // Instance APIs
+  // Instance APIs (mapped to Agent APIs)
   async getInstances(): Promise<Instance[]> {
-    return this.request<Instance[]>('/instances');
+    const tenantId = this.getTenantId();
+    return this.request<Instance[]>(`/tenants/${tenantId}/agents`);
   }
 
   async getInstance(id: string): Promise<Instance> {
-    return this.request<Instance>(`/instances/${id}`);
+    const tenantId = this.getTenantId();
+    return this.request<Instance>(`/tenants/${tenantId}/agents/${id}`);
   }
 
   async createInstance(data: CreateInstanceRequest): Promise<Instance> {
-    return this.request<Instance>('/instances', {
+    const tenantId = this.getTenantId();
+    return this.request<Instance>(`/tenants/${tenantId}/agents`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async startInstance(id: string): Promise<Instance> {
-    return this.request<Instance>(`/instances/${id}/start`, {
+    const tenantId = this.getTenantId();
+    return this.request<Instance>(`/tenants/${tenantId}/agents/${id}/start`, {
       method: 'POST',
     });
   }
 
   async stopInstance(id: string): Promise<Instance> {
-    return this.request<Instance>(`/instances/${id}/stop`, {
+    const tenantId = this.getTenantId();
+    return this.request<Instance>(`/tenants/${tenantId}/agents/${id}/stop`, {
       method: 'POST',
     });
   }
 
   async restartInstance(id: string): Promise<Instance> {
-    return this.request<Instance>(`/instances/${id}/restart`, {
-      method: 'POST',
-    });
+    // Restart = stop + start
+    await this.stopInstance(id);
+    return this.startInstance(id);
   }
 
   async deleteInstance(id: string): Promise<void> {
-    return this.request<void>(`/instances/${id}`, {
+    const tenantId = this.getTenantId();
+    return this.request<void>(`/tenants/${tenantId}/agents/${id}`, {
       method: 'DELETE',
     });
   }
 
-  // Log APIs
+  // Log APIs (placeholder - implement if backend supports)
   async getLogs(instanceId: string, limit = 100): Promise<LogEntry[]> {
-    return this.request<LogEntry[]>(
-      `/instances/${instanceId}/logs?limit=${limit}`
-    );
+    // TODO: Implement if backend has logs API
+    return [];
+  }
+
+  // Health check API
+  async getHealth(): Promise<{ data: Instance[]; stats: { total: number; healthy: number; unhealthy: number; error: number } }> {
+    return this.request<any>('/admin/agents/health');
+  }
+
+  // Billing APIs (Mock for now - replace with real API calls later)
+  private mockMode = true; // Set to false when backend is ready
+
+  async getSubscription(): Promise<import('@/types').Subscription> {
+    if (this.mockMode) {
+      // Mock data
+      return {
+        plan: 'free',
+        status: 'active',
+        current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        cancel_at_period_end: false,
+      };
+    }
+    return this.request<import('@/types').Subscription>('/billing/subscription');
+  }
+
+  async getInvoices(): Promise<import('@/types').Invoice[]> {
+    if (this.mockMode) {
+      // Mock data - no invoices for free plan
+      return [];
+    }
+    return this.request<import('@/types').Invoice[]>('/billing/invoices');
+  }
+
+  async createCheckoutSession(plan: 'pro' | 'business'): Promise<import('@/types').CheckoutSessionResponse> {
+    if (this.mockMode) {
+      // Mock: simulate redirect to success page
+      return {
+        checkout_url: '/billing?success=true',
+      };
+    }
+    return this.request<import('@/types').CheckoutSessionResponse>('/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ plan }),
+    });
+  }
+
+  async createBillingPortal(): Promise<import('@/types').BillingPortalResponse> {
+    if (this.mockMode) {
+      // Mock: redirect back to billing
+      return {
+        portal_url: '/billing',
+      };
+    }
+    return this.request<import('@/types').BillingPortalResponse>('/billing/portal', {
+      method: 'POST',
+    });
   }
 }
 

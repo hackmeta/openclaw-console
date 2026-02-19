@@ -2,7 +2,7 @@
 
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { StatusBadge } from '@/components/status-badge';
-import { mockInstances } from '@/lib/mock-data';
+import { api } from '@/lib/api';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import type { Instance } from '@/types';
@@ -10,15 +10,38 @@ import type { Instance } from '@/types';
 export default function DashboardPage() {
   const [instances, setInstances] = useState<Instance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    // TODO: Replace with real API call
-    // api.getInstances().then(setInstances).finally(() => setLoading(false));
-    setTimeout(() => {
-      setInstances(mockInstances);
-      setLoading(false);
-    }, 500);
+    loadInstances();
   }, []);
+
+  const loadInstances = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const data = await api.getInstances();
+      setInstances(data);
+    } catch (err) {
+      console.error('Failed to load instances:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load instances');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Map agent data to instance display format
+  const getDisplayModel = (instance: Instance) => {
+    return instance.llm_model || instance.model || 'N/A';
+  };
+
+  const getDisplayPlan = (instance: Instance) => {
+    return instance.plan || 'Free';
+  };
+
+  const getDisplayIP = (instance: Instance) => {
+    return instance.vm_ip || instance.ip;
+  };
 
   return (
     <DashboardLayout>
@@ -61,6 +84,19 @@ export default function DashboardPage() {
           </div>
         </div>
 
+        {/* Error message */}
+        {error && (
+          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+            {error}
+            <button
+              onClick={loadInstances}
+              className="ml-4 underline hover:no-underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Instances List */}
         <div className="rounded-lg border border-gray-800 bg-gray-900">
           <div className="border-b border-gray-800 px-6 py-4">
@@ -97,13 +133,13 @@ export default function DashboardPage() {
                       <StatusBadge status={instance.status} />
                     </div>
                     <div className="mt-1 flex items-center gap-4 text-xs text-gray-500">
-                      <span>Model: {instance.model}</span>
+                      <span>Model: {getDisplayModel(instance)}</span>
                       <span>•</span>
-                      <span>Plan: {instance.plan}</span>
-                      {instance.ip && (
+                      <span>Plan: {getDisplayPlan(instance)}</span>
+                      {getDisplayIP(instance) && (
                         <>
                           <span>•</span>
-                          <span>IP: {instance.ip}</span>
+                          <span>IP: {getDisplayIP(instance)}</span>
                         </>
                       )}
                     </div>

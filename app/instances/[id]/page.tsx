@@ -2,7 +2,7 @@
 
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { StatusBadge } from '@/components/status-badge';
-import { mockInstances, mockLogs } from '@/lib/mock-data';
+import { api } from '@/lib/api';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Instance, LogEntry } from '@/types';
@@ -26,23 +26,26 @@ export default function InstanceDetailPage({ params }: Props) {
   useEffect(() => {
     if (!id) return;
 
-    // TODO: Replace with real API calls
-    // Promise.all([api.getInstance(id), api.getLogs(id)])
-    //   .then(([inst, logs]) => {
-    //     setInstance(inst);
-    //     setLogs(logs);
-    //   })
-    //   .finally(() => setLoading(false));
-
-    setTimeout(() => {
-      const found = mockInstances.find((i) => i.id === id);
-      if (found) {
-        setInstance(found);
-        setLogs(mockLogs.filter((l) => l.instance_id === id));
-      }
-      setLoading(false);
-    }, 500);
+    loadInstanceData();
   }, [id]);
+
+  const loadInstanceData = async () => {
+    if (!id) return;
+    
+    try {
+      setLoading(true);
+      const [inst, logs] = await Promise.all([
+        api.getInstance(id),
+        api.getLogs(id),
+      ]);
+      setInstance(inst);
+      setLogs(logs);
+    } catch (error) {
+      console.error('Failed to load instance:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleAction = async (action: 'start' | 'stop' | 'restart' | 'delete') => {
     if (!instance) return;
@@ -54,23 +57,19 @@ export default function InstanceDetailPage({ params }: Props) {
     setActionLoading(true);
 
     try {
-      // TODO: Replace with real API calls
-      // if (action === 'delete') {
-      //   await api.deleteInstance(instance.id);
-      //   router.push('/dashboard');
-      // } else {
-      //   const updated = await api[`${action}Instance`](instance.id);
-      //   setInstance(updated);
-      // }
-
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
       if (action === 'delete') {
+        await api.deleteInstance(instance.id);
         router.push('/dashboard');
       } else {
-        const newStatus =
-          action === 'start' ? 'running' : action === 'stop' ? 'stopped' : instance.status;
-        setInstance({ ...instance, status: newStatus });
+        let updated: Instance;
+        if (action === 'start') {
+          updated = await api.startInstance(instance.id);
+        } else if (action === 'stop') {
+          updated = await api.stopInstance(instance.id);
+        } else {
+          updated = await api.restartInstance(instance.id);
+        }
+        setInstance(updated);
       }
     } catch (error) {
       console.error('Action failed:', error);
@@ -131,22 +130,28 @@ export default function InstanceDetailPage({ params }: Props) {
             <dl className="space-y-3">
               <div>
                 <dt className="text-sm text-gray-400">Model</dt>
-                <dd className="text-sm font-medium text-white mt-1">{instance.model}</dd>
+                <dd className="text-sm font-medium text-white mt-1">
+                  {instance.llm_model || instance.model || 'N/A'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-sm text-gray-400">Provider</dt>
+                <dd className="text-sm font-medium text-white mt-1">
+                  {instance.llm_provider || 'N/A'}
+                </dd>
               </div>
               <div>
                 <dt className="text-sm text-gray-400">Channel</dt>
-                <dd className="text-sm font-medium text-white mt-1">{instance.channel}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-400">Plan</dt>
-                <dd className="text-sm font-medium text-white mt-1">{instance.plan}</dd>
-              </div>
-              <div>
-                <dt className="text-sm text-gray-400">Bot Token</dt>
-                <dd className="text-sm font-mono text-white mt-1">
-                  {instance.bot_token.slice(0, 10)}...
+                <dd className="text-sm font-medium text-white mt-1">
+                  {instance.channel_type || instance.channel || 'N/A'}
                 </dd>
               </div>
+              {instance.description && (
+                <div>
+                  <dt className="text-sm text-gray-400">Description</dt>
+                  <dd className="text-sm text-white mt-1">{instance.description}</dd>
+                </div>
+              )}
             </dl>
           </div>
 
@@ -159,10 +164,24 @@ export default function InstanceDetailPage({ params }: Props) {
                   <StatusBadge status={instance.status} />
                 </dd>
               </div>
-              {instance.ip && (
+              {(instance.vm_ip || instance.ip) && (
                 <div>
                   <dt className="text-sm text-gray-400">IP Address</dt>
-                  <dd className="text-sm font-mono text-white mt-1">{instance.ip}</dd>
+                  <dd className="text-sm font-mono text-white mt-1">
+                    {instance.vm_ip || instance.ip}
+                  </dd>
+                </div>
+              )}
+              {instance.vm_cpu && (
+                <div>
+                  <dt className="text-sm text-gray-400">CPU</dt>
+                  <dd className="text-sm text-white mt-1">{instance.vm_cpu} cores</dd>
+                </div>
+              )}
+              {instance.vm_memory_mb && (
+                <div>
+                  <dt className="text-sm text-gray-400">Memory</dt>
+                  <dd className="text-sm text-white mt-1">{instance.vm_memory_mb} MB</dd>
                 </div>
               )}
               <div>
@@ -171,12 +190,14 @@ export default function InstanceDetailPage({ params }: Props) {
                   {new Date(instance.created_at).toLocaleString()}
                 </dd>
               </div>
-              <div>
-                <dt className="text-sm text-gray-400">Last Updated</dt>
-                <dd className="text-sm text-white mt-1">
-                  {new Date(instance.updated_at).toLocaleString()}
-                </dd>
-              </div>
+              {instance.started_at && (
+                <div>
+                  <dt className="text-sm text-gray-400">Started</dt>
+                  <dd className="text-sm text-white mt-1">
+                    {new Date(instance.started_at).toLocaleString()}
+                  </dd>
+                </div>
+              )}
             </dl>
           </div>
         </div>
