@@ -32,8 +32,14 @@ const statusConfig = {
   },
 };
 
+const defaultConfig = {
+  color: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+  icon: '●',
+  label: 'Unknown',
+};
+
 export function StatusBadge({ status }: StatusBadgeProps) {
-  const config = statusConfig[status];
+  const config = statusConfig[status] || { ...defaultConfig, label: status || 'Unknown' };
 
   return (
     <span

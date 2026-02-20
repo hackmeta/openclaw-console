@@ -80,11 +80,15 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({
+      const body = await response.json().catch(() => ({
         error: 'Request failed',
         message: response.statusText,
       }));
-      throw new Error(error.message || error.error);
+      // Backend returns { error: { code, message } } format
+      const errMsg = body.message
+        || (typeof body.error === 'string' ? body.error : body.error?.message)
+        || response.statusText;
+      throw new Error(errMsg);
     }
 
     const result = await response.json();
