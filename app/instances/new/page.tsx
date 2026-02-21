@@ -149,7 +149,7 @@ export default function NewInstancePage() {
         channel_config: channelConfig,
         vm_template: 'openclaw-template',
         vm_cpu: 2,
-        vm_memory_mb: 2048,
+        vm_memory_mb: 4096,
         vm_disk_gb: 10,
       });
       

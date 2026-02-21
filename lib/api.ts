@@ -169,6 +169,14 @@ class ApiClient {
     });
   }
 
+  // Change password (settings page)
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    return this.request<void>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    });
+  }
+
   // Instance APIs (mapped to Agent APIs)
   async getInstances(): Promise<Instance[]> {
     const tenantId = this.getTenantId();
@@ -242,51 +250,28 @@ class ApiClient {
     return this.request<any>('/admin/agents/health');
   }
 
-  // Billing APIs (Mock for now - replace with real API calls later)
-  private mockMode = true; // Set to false when backend is ready
-
+  // Billing APIs
   async getSubscription(): Promise<import('@/types').Subscription> {
-    if (this.mockMode) {
-      // Mock data
-      return {
-        plan: 'free',
-        status: 'active',
-        current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        cancel_at_period_end: false,
-      };
-    }
-    return this.request<import('@/types').Subscription>('/billing/subscription');
+    const tenantId = this.getTenantId();
+    return this.request<import('@/types').Subscription>(`/tenants/${tenantId}/billing/subscription`);
   }
 
   async getInvoices(): Promise<import('@/types').Invoice[]> {
-    if (this.mockMode) {
-      // Mock data - no invoices for free plan
-      return [];
-    }
-    return this.request<import('@/types').Invoice[]>('/billing/invoices');
+    const tenantId = this.getTenantId();
+    return this.request<import('@/types').Invoice[]>(`/tenants/${tenantId}/billing/invoices`);
   }
 
   async createCheckoutSession(plan: 'pro' | 'business'): Promise<import('@/types').CheckoutSessionResponse> {
-    if (this.mockMode) {
-      // Mock: simulate redirect to success page
-      return {
-        checkout_url: '/billing?success=true',
-      };
-    }
-    return this.request<import('@/types').CheckoutSessionResponse>('/billing/checkout', {
+    const tenantId = this.getTenantId();
+    return this.request<import('@/types').CheckoutSessionResponse>(`/tenants/${tenantId}/billing/checkout`, {
       method: 'POST',
       body: JSON.stringify({ plan }),
     });
   }
 
   async createBillingPortal(): Promise<import('@/types').BillingPortalResponse> {
-    if (this.mockMode) {
-      // Mock: redirect back to billing
-      return {
-        portal_url: '/billing',
-      };
-    }
-    return this.request<import('@/types').BillingPortalResponse>('/billing/portal', {
+    const tenantId = this.getTenantId();
+    return this.request<import('@/types').BillingPortalResponse>(`/tenants/${tenantId}/billing/portal`, {
       method: 'POST',
     });
   }

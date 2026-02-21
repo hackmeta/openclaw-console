@@ -2,6 +2,7 @@
 
 import { DashboardLayout } from '@/components/dashboard-layout';
 import { useAuth } from '@/lib/auth-context';
+import { api } from '@/lib/api';
 import { useState } from 'react';
 
 export default function SettingsPage() {
@@ -31,11 +32,18 @@ export default function SettingsPage() {
       return;
     }
 
+    // Validate password contains both letters and numbers
+    const hasLetter = /[a-zA-Z]/.test(newPassword);
+    const hasNumber = /[0-9]/.test(newPassword);
+    if (!hasLetter || !hasNumber) {
+      setError('Password must contain both letters and numbers');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // TODO: Replace with real API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await api.changePassword(currentPassword, newPassword);
       setMessage('Password updated successfully');
       setCurrentPassword('');
       setNewPassword('');
@@ -151,7 +159,12 @@ export default function SettingsPage() {
 
         {/* API Key */}
         <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">API Key</h2>
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="text-lg font-semibold text-white">API Key</h2>
+            <span className="rounded-full bg-yellow-500/10 border border-yellow-500/20 px-3 py-1 text-xs font-medium text-yellow-400">
+              Coming Soon
+            </span>
+          </div>
           <p className="text-sm text-gray-400 mb-4">
             Use this key to authenticate API requests
           </p>
