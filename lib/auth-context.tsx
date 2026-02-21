@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const payload = decodeJWT(response.access_token);
     const userWithVerification = {
       ...response.user,
-      email_verified: payload?.email_verified || false,
+      email_verified: payload?.email_verified !== false,
     };
     setUser(userWithVerification);
     
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const payload = decodeJWT(response.access_token);
     const userWithVerification = {
       ...response.user,
-      email_verified: payload?.email_verified || false,
+      email_verified: payload?.email_verified !== false,
     };
     setUser(userWithVerification);
     
