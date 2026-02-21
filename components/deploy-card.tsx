@@ -104,7 +104,7 @@ export function DeployCard({ currentPlan, instanceCount, onDeployed }: DeployCar
         llm_model: modelName,
         channel_type: channel,
         channel_config: {
-          bot_token_secret_id: botToken.trim(),
+          bot_token: botToken.trim(),
         },
         vm_template: 'openclaw-template',
         vm_cpu: 2,

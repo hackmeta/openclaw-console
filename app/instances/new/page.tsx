@@ -131,9 +131,9 @@ export default function NewInstancePage() {
       // Build channel config based on channel type
       const channelConfig: ChannelConfig = {};
       if (formData.channel === 'telegram') {
-        channelConfig.bot_token_secret_id = formData.botToken;
+        channelConfig.bot_token = formData.botToken;
       } else if (formData.channel === 'discord') {
-        channelConfig.bot_token_secret_id = formData.botToken;
+        channelConfig.bot_token = formData.botToken;
         channelConfig.guild_id = formData.guildId;
       } else if (formData.channel === 'whatsapp') {
         channelConfig.phone_number = formData.phoneNumber;

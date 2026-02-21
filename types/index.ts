@@ -58,6 +58,7 @@ export interface AuthResponse {
 }
 
 export interface ChannelConfig {
+  bot_token?: string;
   bot_token_secret_id?: string;
   guild_id?: string;
   phone_number?: string;
