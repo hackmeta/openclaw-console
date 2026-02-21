@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: '📊' },
+  { name: 'Instances', href: '/instances', icon: '🤖' },
   { name: 'Billing', href: '/billing', icon: '💳' },
   { name: 'Settings', href: '/settings', icon: '⚙️' },
   { name: 'Docs', href: '/docs', icon: '📚' },

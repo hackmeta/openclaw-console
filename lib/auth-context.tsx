@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setTenantId(payload.tenant_id);
     }
     
-    router.push('/dashboard');
+    router.push('/instances');
   };
 
   const register = async (data: RegisterRequest) => {
