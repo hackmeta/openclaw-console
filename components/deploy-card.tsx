@@ -95,7 +95,7 @@ export function DeployCard({ currentPlan, instanceCount, onDeployed }: DeployCar
       setDeployStep(1);
       await new Promise(r => setTimeout(r, 500));
 
-      // Step 2: Starting VM
+      // Step 2: Create instance
       setDeployStep(2);
       const instance = await api.createInstance({
         name: instanceName,
@@ -112,17 +112,39 @@ export function DeployCard({ currentPlan, instanceCount, onDeployed }: DeployCar
         vm_disk_gb: 10,
       });
 
-      // Step 3: Installing OpenClaw
+      // Step 3: Auto-start (creates VM + installs OpenClaw)
       setDeployStep(3);
-      await new Promise(r => setTimeout(r, 2000));
+      await api.startInstance(instance.id);
 
-      // Step 4: Connecting channel
+      // Step 4: Connecting channel (wait for VM boot)
       setDeployStep(4);
-      await new Promise(r => setTimeout(r, 1500));
+      // Poll instance status until running or timeout
+      const startTime = Date.now();
+      const timeout = 120000; // 2 min
+      let isRunning = false;
+      while (Date.now() - startTime < timeout) {
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+          const status = await api.getInstance(instance.id);
+          if (status.status === 'running') {
+            isRunning = true;
+            break;
+          }
+          if (status.status === 'error' || status.status === 'stopped') {
+            throw new Error('Instance failed to start');
+          }
+        } catch (pollErr: any) {
+          if (pollErr.message === 'Instance failed to start') throw pollErr;
+          // ignore transient poll errors
+        }
+      }
 
       // Step 5: Bot online
       setDeployStep(5);
       setDeployedInstanceId(instance.id);
+      if (!isRunning) {
+        setDeployError('Instance is taking longer than expected. Check the instance page for status.');
+      }
 
     } catch (err) {
       setDeployError(friendlyError(err));
