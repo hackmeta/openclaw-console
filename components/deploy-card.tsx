@@ -59,8 +59,7 @@ export function DeployCard({ currentPlan, instanceCount, onDeployed }: DeployCar
   const [model, setModel] = useState<ModelType>(modelDefaults[currentPlan]);
 
   const getAutoName = () => {
-    const suffix = Date.now().toString(36).slice(-4);
-    return `my-bot-${suffix}`;
+    return `my-bot-${String(instanceCount + 1).padStart(3, '0')}`;
   };
 
   const handleDeploy = async () => {
